@@ -5,9 +5,9 @@ from datetime import timedelta
 
 st.set_page_config(page_title="Poros Milestone 流程图", layout="wide")
 st.title("🚀 Poros 产品 Milestone 流程图")
-st.markdown("**老师想要的流程图**：横向时间线 + 每个节点有日期和描述（已美化）")
+st.markdown("**流程图美化版**：小圆点表示时间节点 + 横线连接时间段")
 
-# 加载数据
+# 加载数据（保持不变）
 @st.cache_data
 def load_data():
     df = pd.read_excel("data.xlsx", sheet_name="产品信息与Milestone", engine="openpyxl")
@@ -29,7 +29,7 @@ main_df = df[df['产品名称'] == selected].copy()
 child_df = df[df['父记录'] == selected].copy() if '父记录' in df.columns else pd.DataFrame()
 combined = pd.concat([main_df, child_df])
 
-# 构建 Gantt 数据
+# 构建数据（保持你的逻辑）
 data = []
 for _, row in combined.iterrows():
     name = row['产品名称']
@@ -61,7 +61,7 @@ if gantt_df.empty:
 
 st.success(f"当前显示：**{selected}**")
 
-# 美化后的图表
+# 美化后的图表（小圆点 + 横线连接）
 fig = px.timeline(
     gantt_df,
     x_start="开始",
@@ -70,16 +70,15 @@ fig = px.timeline(
     color="阶段",
     hover_data=["完整描述"],
     title=f"{selected} Milestone 流程图",
-    color_discrete_map={"MS1": "#1f77b4", "MS2": "#ff7f0e", "MS3": "#2ca02c"}
 )
 
-# 美化关键部分
+# 美化：让横条变细 + 加上圆点效果 + 显示日期文字
 fig.update_traces(
-    text=gantt_df["日期"] + "<br>" + gantt_df["描述"],   # 在节点上直接显示日期 + 描述
-    textposition="inside",
-    textfont=dict(size=11, color="white"),
-    marker_line_width=2,
-    opacity=0.9
+    marker=dict(size=18, line=dict(width=3)),   # 小圆点大小
+    text=gantt_df["日期"] + "<br>" + gantt_df["描述"],   # 在节点上显示日期+描述
+    textposition="top center",
+    textfont=dict(size=11),
+    line=dict(width=3)   # 横线变粗，更像连接线
 )
 
 fig.update_layout(
@@ -96,7 +95,7 @@ fig.update_yaxes(autorange="reversed")
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("💡 每个彩色横条 = 一个 Milestone 节点 • 节点内显示日期 + 描述 • 子产品用 → 表示")
+st.caption("💡 小圆点 = 时间节点 • 横线连接不同日期 • 节点上方显示日期和描述 • 子产品用 → 表示")
 
 with st.expander("查看当前产品原始数据"):
     st.dataframe(combined, use_container_width=True)

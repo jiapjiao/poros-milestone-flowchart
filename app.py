@@ -1,91 +1,152 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import timedelta
 
-st.set_page_config(page_title="Poros Milestone 流程图", layout="wide")
-st.title("🚀 Poros 产品 Milestone 流程图")
-st.markdown("**支持多选产品，选中后主任务和子任务会同时高亮显示**")
+st.set_page_config(page_title="Poros 产品路线图", layout="wide")
+st.title("🚀 Poros 产品路线图 2026 Q2")
+st.markdown("**左侧可多选产品，选中后对应时间轴会高亮显示**")
 
 # ====================== 加载数据 ======================
 @st.cache_data
 def load_data():
-    df = pd.read_excel("data.xlsx", sheet_name="产品信息与Milestone", engine="openpyxl")
-    df = df.dropna(subset=['产品名称']).copy()
-    df['产品名称'] = df['产品名称'].astype(str).str.strip()
-    df['父记录'] = df.get('父记录', pd.Series()).astype(str).str.strip().replace(['nan', 'None', ''], None)
+    file_path = "data.xlsx"
+    df = pd.read_excel(file_path, sheet_name="产品信息与Milestone")
+    
+    df = df.rename(columns={
+        "产品名称": "产品名称",
+        "负责人": "负责人",
+        "当前状态": "当前状态",
+        "Milestone 起始": "M1描述",
+        "起始日期": "起始日期",
+        "Milestone 中程1": "M2描述",
+        "中程日期1": "中程日期",
+        "Milestone 结束": "M3描述",
+        "结束日期": "结束日期"
+    })
+    
+    df["产品名称"] = df["产品名称"].astype(str).str.strip()
+    
+    for col in ["起始日期", "中程日期", "结束日期"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+    
     return df
 
 df = load_data()
 
 # ====================== 左侧多选 ======================
-st.sidebar.header("选择产品（可多选）")
+st.sidebar.header("📋 产品列表（可多选）")
 
-product_list = sorted(df['产品名称'].unique())
-selected_products = st.sidebar.multiselect("选择产品", options=product_list, default=product_list[:3])
+selected_products = []
+for product in df["产品名称"].dropna().unique().tolist():
+    if st.sidebar.checkbox(product, value=False, key=product):
+        selected_products.append(product)
 
-# ====================== 准备数据 ======================
-# 获取所有选中的主任务和它们的子任务
-display_df = df[df['产品名称'].isin(selected_products)].copy()
-
-# 加入子任务
-child_df = df[df['父记录'].isin(selected_products)].copy()
-combined = pd.concat([display_df, child_df]).drop_duplicates()
-
-if combined.empty:
-    st.warning("请选择至少一个产品")
-    st.stop()
-
-# ====================== 绘制大图 ======================
+# ====================== 主图绘制 ======================
 fig = go.Figure()
+colors = ['#1f77b4', '#9467bd', '#2ca02c', '#ff7f0e', '#d62728']
 
-for _, row in combined.iterrows():
-    name = row['产品名称']
-    is_child = row.get('父记录') in selected_products
-    display_name = f"→ {name}" if is_child else name
+product_order = df["产品名称"].dropna().unique().tolist()
+
+for product in product_order:
+    row = df[df["产品名称"] == product].iloc[0]
     
-    color = "#1f77b4" if not is_child else "#ff7f0e"   # 主任务蓝色，子任务橙色
+    is_highlighted = product in selected_products
+    color = colors[product_order.index(product) % len(colors)]
+    opacity = 1.0 if is_highlighted else 0.35
+    line_width = 13 if is_highlighted else 7
 
-    for i in [1, 2, 3]:
-        date_col = f"Milestone {i} 目标日期"
-        desc_col = f"Milestone {i} 描述"
-        
-        if pd.notna(row.get(date_col)):
-            date = row[date_col]
-            desc = str(row.get(desc_col, "")).strip()[:60]
-            if len(str(row.get(desc_col, ""))) > 60:
-                desc += "..."
-            
-            fig.add_trace(go.Scatter(
-                x=[date],
-                y=[display_name],
-                mode='markers+text',
-                marker=dict(size=14, color=color, symbol='circle'),
-                text=[f"M{i} {date.strftime('%m-%d')}"],
-                textposition="top center",
-                hovertemplate=f"<b>{display_name}</b><br>{desc}<extra></extra>",
-                name=display_name
-            ))
+    # 水平时间线（连接 M1-M2-M3）
+    dates = []
+    if pd.notna(row.get("起始日期")):
+        dates.append(row["起始日期"])
+    if pd.notna(row.get("中程日期")):
+        dates.append(row["中程日期"])
+    if pd.notna(row.get("结束日期")):
+        dates.append(row["结束日期"])
+    
+    if len(dates) >= 2:
+        fig.add_trace(go.Scatter(
+            x=dates,
+            y=[product] * len(dates),
+            mode='lines',
+            line=dict(color=color, width=line_width),
+            opacity=opacity,
+            hoverinfo='skip'
+        ))
+
+    # 节点 + 日期 + 描述（直接显示在节点上）
+    if pd.notna(row.get("起始日期")):
+        desc = str(row.get('M1描述', ''))[:50]
+        if len(str(row.get('M1描述', ''))) > 50:
+            desc += "..."
+        fig.add_trace(go.Scatter(
+            x=[row["起始日期"]],
+            y=[product],
+            mode='markers+text',
+            marker=dict(size=16, color='#1f77b4', symbol='circle'),
+            text=[f"M1 {row['起始日期'].strftime('%m-%d')}"],
+            textposition="top center",
+            opacity=opacity,
+            hovertemplate=f"<b style='font-size:18px'>{product}</b><br><span style='font-size:18px'>{row.get('M1描述', '')}</span><extra></extra>"
+        ))
+
+    if pd.notna(row.get("中程日期")):
+        desc = str(row.get('M2描述', ''))[:50]
+        if len(str(row.get('M2描述', ''))) > 50:
+            desc += "..."
+        fig.add_trace(go.Scatter(
+            x=[row["中程日期"]],
+            y=[product],
+            mode='markers+text',
+            marker=dict(size=16, color='#9467bd', symbol='circle'),
+            text=[f"M2 {row['中程日期'].strftime('%m-%d')}"],
+            textposition="top center",
+            opacity=opacity,
+            hovertemplate=f"<b style='font-size:18px'>{product}</b><br><span style='font-size:18px'>{row.get('M2描述', '')}</span><extra></extra>"
+        ))
+
+    if pd.notna(row.get("结束日期")):
+        desc = str(row.get('M3描述', ''))[:50]
+        if len(str(row.get('M3描述', ''))) > 50:
+            desc += "..."
+        fig.add_trace(go.Scatter(
+            x=[row["结束日期"]],
+            y=[product],
+            mode='markers+text',
+            marker=dict(size=16, color='#2ca02c', symbol='circle'),
+            text=[f"M3 {row['结束日期'].strftime('%m-%d')}"],
+            textposition="top center",
+            opacity=opacity,
+            hovertemplate=f"<b style='font-size:18px'>{product}</b><br><span style='font-size:18px'>{row.get('M3描述', '')}</span><extra></extra>"
+        ))
 
 fig.update_layout(
-    title="Poros 产品 Milestone 总览（支持多选 + 子任务显示）",
-    xaxis_title="时间轴 (2026 年)",
-    yaxis_title="产品 / 子产品",
-    height=900,
+    title="Poros 产品路线图 2026 Q2",
+    xaxis_title="时间轴",
+    yaxis_title="",
+    height=1050,
     showlegend=False,
     hovermode="closest",
-    plot_bgcolor="#f8fafc",
-    xaxis=dict(type='date', tickformat='%m-%d'),
-    margin=dict(l=250, r=50, t=100, b=100),
-    font=dict(size=14)
+    plot_bgcolor="white",
+    xaxis=dict(type='date', tickformat='%Y-%m-%d'),
+    margin=dict(l=320, r=50, t=100, b=100),
+    font=dict(size=16),
+    yaxis=dict(autorange="reversed")
 )
-
-fig.update_yaxes(autorange="reversed")  # 时间早的在下面
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("💡 蓝色 = 主任务　橙色 = 子任务　每个节点显示日期 + 描述　支持同时选中多个产品")
+# ====================== 右侧详情 ======================
+st.sidebar.markdown("---")
+if selected_products:
+    for prod in selected_products:
+        detail = df[df["产品名称"] == prod].iloc[0]
+        with st.sidebar.expander(f"📋 {prod} 详细信息", expanded=False):
+            st.write(f"**负责人**：{detail.get('负责人', '未填写')}")
+            st.write(f"**当前状态**：{detail.get('当前状态', '未填写')}")
+            st.write(f"**🔵 起始**：{detail.get('起始日期', '')} | {detail.get('M1描述', '')}")
+            st.write(f"**🟣 中程**：{detail.get('中程日期', '')} | {detail.get('M2描述', '')}")
+            st.write(f"**🟢 结束**：{detail.get('结束日期', '')} | {detail.get('M3描述', '')}")
 
-# ====================== 详细数据表 ======================
-with st.expander("查看选中产品的原始数据"):
-    st.dataframe(combined[['产品名称', '负责人', '当前状态', 'M1描述', 'M1日期', 'M2描述', 'M2日期', 'M3描述', 'M3日期']], use_container_width=True)
+st.caption("数据来源：data.xlsx | 修改Excel后重新部署即可更新")

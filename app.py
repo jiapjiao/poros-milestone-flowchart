@@ -4,60 +4,60 @@ import plotly.express as px
 from datetime import datetime
 
 st.set_page_config(page_title="Poros 产品 Milestone 流程图", layout="wide")
+
 st.title("🚀 Poros 产品 Milestone 流程图")
 
-# 读取 Excel 并处理日期（关键修复）
+# 安全加载数据并转换日期
 @st.cache_data
 def load_data():
     df = pd.read_excel("data.xlsx", sheet_name="产品信息与Milestone", engine="openpyxl")
     
-    # 处理 Excel 序列号日期（46119 等）
+    # 处理 Excel 序列号日期（关键修复：使用更安全的转换方式）
     date_cols = ["Milestone 1 目标日期", "Milestone 2 目标日期", "Milestone 3 目标日期"]
     for col in date_cols:
         if col in df.columns:
-            # 转换 Excel 数字日期
+            # 先转为数值
             df[col] = pd.to_numeric(df[col], errors='coerce')
-            mask = df[col].notna()
-            df.loc[mask, col] = pd.to_timedelta(df.loc[mask, col], unit='D') + pd.Timestamp('1899-12-30')
-            df[col] = pd.to_datetime(df[col], errors='coerce')
+            # 安全转换为日期（避免 OutOfBoundsTimedelta）
+            df[col] = pd.to_datetime(df[col], unit='D', origin='1899-12-30', errors='coerce')
     
-    # 清理空行和空产品名称
+    # 清理空行
     df = df.dropna(subset=['产品名称']).copy()
-    df = df[df['产品名称'].astype(str).str.strip() != '']
+    df['产品名称'] = df['产品名称'].astype(str).str.strip()
+    df = df[df['产品名称'] != '']
     
     return df
 
 df = load_data()
 
 if df.empty:
-    st.error("数据为空，请检查 data.xlsx 文件")
+    st.error("数据为空，请检查 data.xlsx")
     st.stop()
 
-# 侧边栏过滤
-st.sidebar.header("筛选条件")
-products = sorted(df['产品名称'].dropna().unique())
-selected_products = st.sidebar.multiselect("选择产品", products, default=products[:5])
+st.success(f"✅ 数据加载成功！共 {len(df)} 条记录")
 
-status = df['当前状态'].dropna().unique()
-selected_status = st.sidebar.multiselect("当前状态", status, default=status)
+# 侧边栏筛选
+st.sidebar.header("🔍 筛选条件")
+products = sorted(df['产品名称'].unique())
+selected_products = st.sidebar.multiselect("选择产品", products, default=products[:6])
 
-# 过滤数据
+status_list = df['当前状态'].dropna().unique()
+selected_status = st.sidebar.multiselect("当前状态", status_list, default=status_list)
+
+# 过滤
 filtered_df = df.copy()
 if selected_products:
     filtered_df = filtered_df[filtered_df['产品名称'].isin(selected_products)]
-if selected_status:
+if selected_status.size > 0:
     filtered_df = filtered_df[filtered_df['当前状态'].isin(selected_status)]
 
-st.success(f"✅ 数据加载成功！共 {len(filtered_df)} 条记录（来自飞书文档）")
+# 显示表格
+st.subheader("📋 Milestone 数据表（来自飞书）")
+st.dataframe(filtered_df, use_container_width=True, height=380)
 
-# 显示原始表格（类似飞书视图）
-st.subheader("📋 原始 Milestone 数据表")
-st.dataframe(filtered_df, use_container_width=True, height=400)
+# ==================== Gantt 时间轴流程图 ====================
+st.subheader("📊 Milestone 时间轴流程图（类似老师要求的路线图）")
 
-# ==================== 生成 Gantt 图（最像老师想要的流程图） ====================
-st.subheader("📊 Milestone 时间轴流程图（Gantt 图）")
-
-# 准备 Gantt 图数据（把每个 Milestone 转成一行）
 gantt_data = []
 
 for _, row in filtered_df.iterrows():
@@ -72,43 +72,45 @@ for _, row in filtered_df.iterrows():
             desc = str(row[desc_col]).strip()
             target_date = row[date_col]
             
-            if pd.notna(target_date) and isinstance(target_date, pd.Timestamp):
+            if pd.notna(target_date):
+                # 为每个 Milestone 创建一个短的时间条，便于可视化
                 gantt_data.append({
                     "产品": product,
                     "负责人": owner,
-                    "Milestone": f"MS{i}: {desc[:60]}{'...' if len(desc)>60 else ''}",
-                    "开始日期": target_date - pd.Timedelta(days=7),  # 给一点起始宽度
-                    "结束日期": target_date + pd.Timedelta(days=1),
-                    "颜色分组": f"Milestone {i}"
+                    "阶段": f"Milestone {i}",
+                    "描述": desc[:80] + ("..." if len(desc) > 80 else ""),
+                    "开始日期": target_date - pd.Timedelta(days=3),
+                    "结束日期": target_date + pd.Timedelta(days=3),
+                    "目标日期": target_date.strftime("%Y-%m-%d")
                 })
 
 gantt_df = pd.DataFrame(gantt_data)
 
 if not gantt_df.empty:
-    # 绘制 Gantt 图
     fig = px.timeline(
         gantt_df,
         x_start="开始日期",
         x_end="结束日期",
         y="产品",
-        color="颜色分组",
-        hover_data=["负责人", "Milestone"],
-        title="Poros 各产品 Milestone 时间轴（点击可交互）",
-        labels={"产品": "产品名称", "颜色分组": "里程碑阶段"}
+        color="阶段",
+        hover_data=["负责人", "描述", "目标日期"],
+        title="Poros 各产品 Milestone 时间轴",
+        labels={"产品": "产品 / 项目", "阶段": "里程碑"}
     )
     
-    fig.update_yaxes(autorange="reversed")  # 让最新产品在上面
+    fig.update_yaxes(autorange="reversed")
     fig.update_layout(
-        height=max(600, len(gantt_df) * 25),
-        xaxis_title="时间",
-        yaxis_title="产品",
+        height=max(650, len(gantt_df) * 22),
+        xaxis_title="时间轴（2026年）",
+        yaxis_title="产品名称",
         legend_title="里程碑阶段",
-        hoverlabel=dict(bgcolor="white", font_size=12)
+        hoverlabel=dict(font_size=13)
     )
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    st.caption("💡 操作提示：鼠标悬停可查看详细描述 • 可拖拽缩放时间轴 • 左侧筛选可过滤产品")
 else:
-    st.warning("没有找到有效的日期数据，无法生成时间轴图。请检查 Excel 中的日期列是否有值。")
+    st.warning("当前筛选条件下没有找到带日期的 Milestone 数据")
 
-# 额外信息
-st.caption("💡 提示：日期来自飞书 Excel 的 Milestone 目标日期，已自动转换为正常日期。图表可缩放、hover 查看详情。")
+st.caption("数据来源：飞书文档导出 Excel • 日期已自动转换")

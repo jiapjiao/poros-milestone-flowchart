@@ -3,11 +3,10 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(page_title="Poros Milestone 流程图", layout="wide")
-
 st.title("🚀 Poros 产品 Milestone 流程图")
-st.markdown("**老师要求的样式**：横向时间轴 + 时间节点 + 描述文字")
+st.markdown("**老师要求样式**：横向时间轴 + 时间节点 + 日期和描述文字（支持父子产品）")
 
-# 加载数据
+# 加载并处理数据
 @st.cache_data
 def load_data():
     df = pd.read_excel("data.xlsx", sheet_name="产品信息与Milestone", engine="openpyxl")
@@ -22,80 +21,106 @@ def load_data():
     df = df.dropna(subset=['产品名称']).copy()
     df['产品名称'] = df['产品名称'].astype(str).str.strip()
     df = df[df['产品名称'] != '']
+    
+    # 处理父子关系
+    if '父记录' in df.columns:
+        df['父记录'] = df['父记录'].astype(str).str.strip()
+        df['父记录'] = df['父记录'].replace('nan', None)
+    else:
+        df['父记录'] = None
+    
     return df
 
 df = load_data()
 
-# 准备流程图数据（每个 Milestone 作为一个节点）
-timeline_data = []
+# ==================== 侧边栏选择要查看的产品 ====================
+st.sidebar.header("选择要显示的产品")
+all_main_products = sorted(df['产品名称'].unique())
+selected_main = st.sidebar.selectbox("选择主产品（或父产品）", all_main_products, index=0)
 
-for _, row in df.iterrows():
-    product = str(row['产品名称']).strip()
-    owner = str(row.get('负责人', '')) if pd.notna(row.get('负责人')) else ''
-    
-    for i in [1, 2, 3]:
-        desc_col = f"Milestone {i} 描述"
-        date_col = f"Milestone {i} 目标日期"
+# 获取当前选中的产品及其子产品
+main_df = df[df['产品名称'] == selected_main].copy()
+children = df[df['父记录'] == selected_main] if '父记录' in df.columns else pd.DataFrame()
+
+show_children = not children.empty
+
+st.success(f"当前显示：**{selected_main}** {'（含子产品）' if show_children else ''}")
+
+# 准备节点数据
+def prepare_timeline_data(dataframe, is_child=False):
+    timeline = []
+    for _, row in dataframe.iterrows():
+        prod = str(row['产品名称']).strip()
+        owner = str(row.get('负责人', '')) if pd.notna(row.get('负责人')) else ''
+        prefix = f"{prod} - " if is_child else ""
         
-        if pd.notna(row.get(desc_col)) and pd.notna(row.get(date_col)):
-            desc = str(row[desc_col]).strip()
-            date = row[date_col]
-            
-            if pd.notna(date):
-                short_desc = desc[:55] + ("..." if len(desc) > 55 else "")
-                timeline_data.append({
-                    "产品": product,
-                    "负责人": owner,
-                    "阶段": f"MS{i}",
-                    "日期": date,
-                    "描述": short_desc,
-                    "完整描述": desc,
-                    "显示文字": f"{date.strftime('%m-%d')} {short_desc}"
-                })
+        for i in [1, 2, 3]:
+            desc_col = f"Milestone {i} 描述"
+            date_col = f"Milestone {i} 目标日期"
+            if pd.notna(row.get(desc_col)) and pd.notna(row.get(date_col)):
+                desc = str(row[desc_col]).strip()
+                date_val = row[date_col]
+                if pd.notna(date_val):
+                    short_desc = desc[:50] + ("..." if len(desc) > 50 else "")
+                    timeline.append({
+                        "产品": prod,
+                        "显示名称": prefix + prod,
+                        "阶段": f"MS{i}",
+                        "日期": date_val,
+                        "日期标签": date_val.strftime("%m.%d"),
+                        "描述": short_desc,
+                        "完整描述": desc,
+                        "负责人": owner
+                    })
+    return pd.DataFrame(timeline)
 
-timeline_df = pd.DataFrame(timeline_data)
+# 生成图
+timeline_df = prepare_timeline_data(main_df)
+if show_children:
+    child_df = prepare_timeline_data(children, is_child=True)
+    if not child_df.empty:
+        timeline_df = pd.concat([timeline_df, child_df], ignore_index=True)
 
 if timeline_df.empty:
-    st.error("没有找到有效的日期和描述数据")
+    st.error("当前产品没有有效的 Milestone 日期数据")
     st.stop()
 
-# 绘制横向流程图（时间轴 + 节点标签）
+# 绘制流程图
 fig = px.timeline(
     timeline_df,
     x_start="日期",
-    x_end="日期",                    # 让每个点变成短的节点条
-    y="产品",
+    x_end="日期",
+    y="显示名称",
     color="阶段",
     hover_data=["负责人", "完整描述"],
-    title="Poros Milestone 时间节点流程图（横向）",
-    labels={"产品": "产品 / 项目", "阶段": "里程碑"}
+    title=f"{selected_main} Milestone 时间节点流程图",
 )
 
-# 美化设置 - 更像流程图
 fig.update_traces(
-    marker_line_width=2,
-    opacity=0.85,
-    text=timeline_df["显示文字"],      # 在节点上显示日期 + 描述
+    marker=dict(size=18, line=dict(width=2)),
+    text=timeline_df["日期标签"] + "<br>" + timeline_df["描述"],   # 在节点上直接显示日期 + 描述
     textposition="top center",
-    textfont=dict(size=11)
+    textfont=dict(size=11, color="black")
 )
 
 fig.update_layout(
-    height=750,
+    height=700 if show_children else 550,
     xaxis_title="时间节点（2026 年）",
-    yaxis_title="产品名称",
-    legend_title="里程碑阶段",
-    xaxis=dict(tickformat="%m-%d", tickangle=45),
-    hoverlabel=dict(font_size=13, bgcolor="white"),
-    margin=dict(l=50, r=50, t=80, b=120)
+    yaxis_title="产品 / 子产品",
+    legend_title="里程碑",
+    xaxis=dict(tickformat="%m.%d", tickangle=0),
+    hoverlabel=dict(font_size=14, bgcolor="white"),
+    margin=dict(l=80, r=50, t=100, b=100)
 )
 
-fig.update_yaxes(autorange="reversed")   # 让产品从上到下排列更自然
+fig.update_yaxes(autorange="reversed")
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("💡 使用说明：鼠标悬停在节点上可看完整描述 • 日期直接显示在节点附近 • 可拖动缩放时间范围")
+st.caption("💡 说明：每个圆点/节点上直接显示日期 + 描述 • 鼠标悬停可看完整文字 • 有子产品的会自动把子产品也画在同一张图里")
 
-# 同时保留一个简单表格供你自己查看
-st.subheader("📋 原始数据表（仅供参考）")
-st.dataframe(df, use_container_width=True, height=300)
+# 可选：显示原始数据
+with st.expander("查看原始数据（调试用）"):
+    st.dataframe(df[df['产品名称'] == selected_main], use_container_width=True)
+    if show_children:
+        st.dataframe(children, use_container_width=True)

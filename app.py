@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime
 
 st.set_page_config(page_title="Poros 产品路线图", layout="wide")
 st.title("🚀 Poros 产品路线图 2026 Q2")
@@ -17,12 +16,12 @@ def load_data():
         "产品名称": "产品名称",
         "负责人": "负责人",
         "当前状态": "当前状态",
-        "Milestone 起始": "M1描述",
-        "起始日期": "起始日期",
-        "Milestone 中程1": "M2描述",
-        "中程日期1": "中程日期",
-        "Milestone 结束": "M3描述",
-        "结束日期": "结束日期"
+        "Milestone 1 描述": "M1描述",
+        "Milestone 1 目标日期": "起始日期",
+        "Milestone 2 描述": "M2描述",
+        "Milestone 2 目标日期": "中程日期",
+        "Milestone 3 描述": "M3描述",
+        "Milestone 3 目标日期": "结束日期"
     })
     
     df["产品名称"] = df["产品名称"].astype(str).str.strip()
@@ -57,7 +56,6 @@ for product in product_order:
     opacity = 1.0 if is_highlighted else 0.35
     line_width = 13 if is_highlighted else 7
 
-    # 水平时间线
     if pd.notna(row.get("起始日期")) and pd.notna(row.get("结束日期")):
         fig.add_trace(go.Scatter(
             x=[row["起始日期"], row["结束日期"]],

@@ -5,7 +5,7 @@ from datetime import timedelta
 
 st.set_page_config(page_title="Poros Milestone 流程图", layout="wide")
 st.title("🚀 Poros 产品 Milestone 流程图")
-st.markdown("**流程图美化版**：小圆点表示时间节点 + 横线连接时间段")
+st.markdown("**流程图美化版**：小圆点节点 + 日期显示 + 横线连接")
 
 # 加载数据（保持不变）
 @st.cache_data
@@ -29,7 +29,7 @@ main_df = df[df['产品名称'] == selected].copy()
 child_df = df[df['父记录'] == selected].copy() if '父记录' in df.columns else pd.DataFrame()
 combined = pd.concat([main_df, child_df])
 
-# 构建数据（保持你的逻辑）
+# 构建数据
 data = []
 for _, row in combined.iterrows():
     name = row['产品名称']
@@ -61,7 +61,7 @@ if gantt_df.empty:
 
 st.success(f"当前显示：**{selected}**")
 
-# 美化后的图表（小圆点 + 横线连接）
+# 画图（简化版，避免报错）
 fig = px.timeline(
     gantt_df,
     x_start="开始",
@@ -69,16 +69,15 @@ fig = px.timeline(
     y="产品",
     color="阶段",
     hover_data=["完整描述"],
-    title=f"{selected} Milestone 流程图",
+    title=f"{selected} Milestone 流程图"
 )
 
-# 美化：让横条变细 + 加上圆点效果 + 显示日期文字
+# 美化：小圆点 + 直接显示日期和描述
 fig.update_traces(
-    marker=dict(size=18, line=dict(width=3)),   # 小圆点大小
-    text=gantt_df["日期"] + "<br>" + gantt_df["描述"],   # 在节点上显示日期+描述
+    marker=dict(size=16, line=dict(width=2.5)),
+    text=gantt_df["日期"] + "<br>" + gantt_df["描述"],   # 关键：节点上显示日期+描述
     textposition="top center",
-    textfont=dict(size=11),
-    line=dict(width=3)   # 横线变粗，更像连接线
+    textfont=dict(size=10.5)
 )
 
 fig.update_layout(
@@ -87,15 +86,14 @@ fig.update_layout(
     yaxis_title="产品 / 子产品",
     legend_title="里程碑阶段",
     xaxis=dict(tickformat="%m.%d", tickangle=45),
-    margin=dict(l=200, r=50, t=100, b=120),
-    font=dict(size=13)
+    margin=dict(l=200, r=50, t=100, b=120)
 )
 
 fig.update_yaxes(autorange="reversed")
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("💡 小圆点 = 时间节点 • 横线连接不同日期 • 节点上方显示日期和描述 • 子产品用 → 表示")
+st.caption("💡 小圆点 = 时间节点 • 横线连接不同日期 • 节点上方显示日期和描述")
 
 with st.expander("查看当前产品原始数据"):
     st.dataframe(combined, use_container_width=True)

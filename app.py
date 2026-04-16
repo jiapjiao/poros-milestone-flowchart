@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 
 st.set_page_config(page_title="Poros 产品路线图", layout="wide")
 st.title("🚀 Poros 产品路线图 2026 Q2")
-st.markdown("**左侧只显示主产品，可多选。选中后会同时显示其子产品**")
+st.markdown("**左侧只显示主产品，可多选。选中后主产品和子产品都会高亮**")
 
 # ====================== 加载数据 ======================
 @st.cache_data
@@ -35,17 +35,11 @@ def load_data():
 
 df = load_data()
 
-# ====================== 主产品列表（只显示9个主产品） ======================
+# ====================== 主产品列表 ======================
 main_products = [
-    "PorosHoster",
-    "PorosAgent-MDagent",
-    "PorosAgent-MGexpert",
-    "PorosAgent-SchwarzXtal",
-    "PorosMatterNets",
-    "PorosData toolset",
-    "PorosAIEduBooks",
-    "PorosEquipAutomation",
-    "Poros RAG"
+    "PorosHoster", "PorosAgent-MDagent", "PorosAgent-MGexpert",
+    "PorosAgent-SchwarzXtal", "PorosMatterNets", "PorosData toolset",
+    "PorosAIEduBooks", "PorosEquipAutomation", "Poros RAG"
 ]
 
 st.sidebar.header("📋 产品列表（可多选）")
@@ -55,10 +49,8 @@ for product in main_products:
     if st.sidebar.checkbox(product, value=False, key=product):
         selected_main.append(product)
 
-# ====================== 准备显示数据（主产品 + 子产品） ======================
+# ====================== 准备显示数据（主 + 子） ======================
 display_products = selected_main.copy()
-
-# 加入选中的主产品的所有子产品
 for main in selected_main:
     children = df[df["父记录"] == main]["产品名称"].tolist()
     for child in children:
@@ -72,10 +64,11 @@ colors = ['#1f77b4', '#9467bd', '#2ca02c', '#ff7f0e', '#d62728']
 for i, product in enumerate(display_products):
     row = df[df["产品名称"] == product].iloc[0]
     
-    is_highlighted = product in selected_main
+    is_main = product in selected_main
+    opacity = 1.0 if is_main else 0.85
+    line_width = 14 if is_main else 8
+
     color = colors[i % len(colors)]
-    opacity = 1.0 if is_highlighted else 0.35
-    line_width = 13 if is_highlighted else 7
 
     # 水平时间线
     dates = []
@@ -93,60 +86,72 @@ for i, product in enumerate(display_products):
             hoverinfo='skip'
         ))
 
-    # 节点 + 日期
+    # 节点 + 日期 + 描述（直接显示在节点下方）
     if pd.notna(row.get("起始日期")):
+        desc = str(row.get('M1描述', '无描述'))[:80]
+        if len(str(row.get('M1描述', ''))) > 80:
+            desc += "..."
         fig.add_trace(go.Scatter(
             x=[row["起始日期"]],
             y=[product],
             mode='markers+text',
             marker=dict(size=16, color='#1f77b4', symbol='circle'),
-            text=[f"M1 {row['起始日期'].strftime('%m-%d')}"],
-            textposition="top center",
+            text=[f"M1 {row['起始日期'].strftime('%m-%d')}<br>{desc}"],
+            textposition="bottom center",
+            textfont=dict(size=13, color="black"),
             opacity=opacity,
-            hovertemplate=f"<b style='font-size:18px'>{product}</b><br><span style='font-size:18px'>{row.get('M1描述', '')}</span><extra></extra>"
+            hovertemplate=f"<b>{product}</b><br>{row.get('M1描述', '')}<extra></extra>"
         ))
 
     if pd.notna(row.get("中程日期")):
+        desc = str(row.get('M2描述', '无描述'))[:80]
+        if len(str(row.get('M2描述', ''))) > 80:
+            desc += "..."
         fig.add_trace(go.Scatter(
             x=[row["中程日期"]],
             y=[product],
             mode='markers+text',
             marker=dict(size=16, color='#9467bd', symbol='circle'),
-            text=[f"M2 {row['中程日期'].strftime('%m-%d')}"],
-            textposition="top center",
+            text=[f"M2 {row['中程日期'].strftime('%m-%d')}<br>{desc}"],
+            textposition="bottom center",
+            textfont=dict(size=13, color="black"),
             opacity=opacity,
-            hovertemplate=f"<b style='font-size:18px'>{product}</b><br><span style='font-size:18px'>{row.get('M2描述', '')}</span><extra></extra>"
+            hovertemplate=f"<b>{product}</b><br>{row.get('M2描述', '')}<extra></extra>"
         ))
 
     if pd.notna(row.get("结束日期")):
+        desc = str(row.get('M3描述', '无描述'))[:80]
+        if len(str(row.get('M3描述', ''))) > 80:
+            desc += "..."
         fig.add_trace(go.Scatter(
             x=[row["结束日期"]],
             y=[product],
             mode='markers+text',
             marker=dict(size=16, color='#2ca02c', symbol='circle'),
-            text=[f"M3 {row['结束日期'].strftime('%m-%d')}"],
-            textposition="top center",
+            text=[f"M3 {row['结束日期'].strftime('%m-%d')}<br>{desc}"],
+            textposition="bottom center",
+            textfont=dict(size=13, color="black"),
             opacity=opacity,
-            hovertemplate=f"<b style='font-size:18px'>{product}</b><br><span style='font-size:18px'>{row.get('M3描述', '')}</span><extra></extra>"
+            hovertemplate=f"<b>{product}</b><br>{row.get('M3描述', '')}<extra></extra>"
         ))
 
 fig.update_layout(
     title="Poros 产品路线图 2026 Q2",
     xaxis_title="时间轴",
     yaxis_title="",
-    height=1050,
+    height=1100,
     showlegend=False,
     hovermode="closest",
     plot_bgcolor="white",
     xaxis=dict(type='date', tickformat='%Y-%m-%d'),
-    margin=dict(l=320, r=50, t=100, b=100),
-    font=dict(size=16),
+    margin=dict(l=320, r=50, t=120, b=150),
+    font=dict(size=15),
     yaxis=dict(autorange="reversed")
 )
 
 st.plotly_chart(fig, use_container_width=True)
 
-# ====================== 右侧详情（只显示选中的主产品） ======================
+# ====================== 右侧详情 ======================
 st.sidebar.markdown("---")
 if selected_main:
     for prod in selected_main:

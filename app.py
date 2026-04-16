@@ -5,9 +5,9 @@ from datetime import timedelta
 
 st.set_page_config(page_title="Poros Milestone 流程图", layout="wide")
 st.title("🚀 Poros 产品 Milestone 流程图")
-st.markdown("**流程图美化版**：小圆点节点 + 日期显示 + 横线连接")
+st.markdown("**老师想要的流程图**：横向时间线 + 每个节点有日期和描述（已美化）")
 
-# 加载数据（保持不变）
+# 加载数据
 @st.cache_data
 def load_data():
     df = pd.read_excel("data.xlsx", sheet_name="产品信息与Milestone", engine="openpyxl")
@@ -29,7 +29,7 @@ main_df = df[df['产品名称'] == selected].copy()
 child_df = df[df['父记录'] == selected].copy() if '父记录' in df.columns else pd.DataFrame()
 combined = pd.concat([main_df, child_df])
 
-# 构建数据
+# 构建 Gantt 数据
 data = []
 for _, row in combined.iterrows():
     name = row['产品名称']
@@ -61,7 +61,7 @@ if gantt_df.empty:
 
 st.success(f"当前显示：**{selected}**")
 
-# 画图（简化版，避免报错）
+# 美化后的图表
 fig = px.timeline(
     gantt_df,
     x_start="开始",
@@ -69,15 +69,17 @@ fig = px.timeline(
     y="产品",
     color="阶段",
     hover_data=["完整描述"],
-    title=f"{selected} Milestone 流程图"
+    title=f"{selected} Milestone 流程图",
+    color_discrete_map={"MS1": "#1f77b4", "MS2": "#ff7f0e", "MS3": "#2ca02c"}
 )
 
-# 美化：小圆点 + 直接显示日期和描述
+# 美化关键部分
 fig.update_traces(
-    marker=dict(size=16, line=dict(width=2.5)),
-    text=gantt_df["日期"] + "<br>" + gantt_df["描述"],   # 关键：节点上显示日期+描述
-    textposition="top center",
-    textfont=dict(size=10.5)
+    text=gantt_df["日期"] + "<br>" + gantt_df["描述"],   # 在节点上直接显示日期 + 描述
+    textposition="inside",
+    textfont=dict(size=11, color="white"),
+    marker_line_width=2,
+    opacity=0.9
 )
 
 fig.update_layout(
@@ -86,14 +88,15 @@ fig.update_layout(
     yaxis_title="产品 / 子产品",
     legend_title="里程碑阶段",
     xaxis=dict(tickformat="%m.%d", tickangle=45),
-    margin=dict(l=200, r=50, t=100, b=120)
+    margin=dict(l=200, r=50, t=100, b=120),
+    font=dict(size=13)
 )
 
 fig.update_yaxes(autorange="reversed")
 
 st.plotly_chart(fig, use_container_width=True)
 
-st.caption("💡 小圆点 = 时间节点 • 横线连接不同日期 • 节点上方显示日期和描述")
+st.caption("💡 每个彩色横条 = 一个 Milestone 节点 • 节点内显示日期 + 描述 • 子产品用 → 表示")
 
 with st.expander("查看当前产品原始数据"):
     st.dataframe(combined, use_container_width=True)

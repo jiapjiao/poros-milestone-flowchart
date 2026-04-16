@@ -56,35 +56,22 @@ for product in product_order:
     opacity = 1.0 if is_highlighted else 0.35
     line_width = 13 if is_highlighted else 7
 
-    # 水平时间线（连接 M1-M2-M3）
-    dates = []
-    if pd.notna(row.get("起始日期")):
-        dates.append(row["起始日期"])
-    if pd.notna(row.get("中程日期")):
-        dates.append(row["中程日期"])
-    if pd.notna(row.get("结束日期")):
-        dates.append(row["结束日期"])
-    
-    if len(dates) >= 2:
+    if pd.notna(row.get("起始日期")) and pd.notna(row.get("结束日期")):
         fig.add_trace(go.Scatter(
-            x=dates,
-            y=[product] * len(dates),
+            x=[row["起始日期"], row["结束日期"]],
+            y=[product, product],
             mode='lines',
             line=dict(color=color, width=line_width),
             opacity=opacity,
             hoverinfo='skip'
         ))
 
-    # 节点 + 日期 + 描述（直接显示在节点上）
     if pd.notna(row.get("起始日期")):
-        desc = str(row.get('M1描述', ''))[:50]
-        if len(str(row.get('M1描述', ''))) > 50:
-            desc += "..."
         fig.add_trace(go.Scatter(
             x=[row["起始日期"]],
             y=[product],
             mode='markers+text',
-            marker=dict(size=16, color='#1f77b4', symbol='circle'),
+            marker=dict(size=15, color='#1f77b4', symbol='circle'),
             text=[f"M1 {row['起始日期'].strftime('%m-%d')}"],
             textposition="top center",
             opacity=opacity,
@@ -92,14 +79,11 @@ for product in product_order:
         ))
 
     if pd.notna(row.get("中程日期")):
-        desc = str(row.get('M2描述', ''))[:50]
-        if len(str(row.get('M2描述', ''))) > 50:
-            desc += "..."
         fig.add_trace(go.Scatter(
             x=[row["中程日期"]],
             y=[product],
             mode='markers+text',
-            marker=dict(size=16, color='#9467bd', symbol='circle'),
+            marker=dict(size=15, color='#9467bd', symbol='circle'),
             text=[f"M2 {row['中程日期'].strftime('%m-%d')}"],
             textposition="top center",
             opacity=opacity,
@@ -107,14 +91,11 @@ for product in product_order:
         ))
 
     if pd.notna(row.get("结束日期")):
-        desc = str(row.get('M3描述', ''))[:50]
-        if len(str(row.get('M3描述', ''))) > 50:
-            desc += "..."
         fig.add_trace(go.Scatter(
             x=[row["结束日期"]],
             y=[product],
             mode='markers+text',
-            marker=dict(size=16, color='#2ca02c', symbol='circle'),
+            marker=dict(size=15, color='#2ca02c', symbol='circle'),
             text=[f"M3 {row['结束日期'].strftime('%m-%d')}"],
             textposition="top center",
             opacity=opacity,
@@ -137,16 +118,25 @@ fig.update_layout(
 
 st.plotly_chart(fig, use_container_width=True)
 
-# ====================== 右侧详情 ======================
+# ====================== 右侧详情（修复显示问题） ======================
 st.sidebar.markdown("---")
 if selected_products:
     for prod in selected_products:
         detail = df[df["产品名称"] == prod].iloc[0]
-        with st.sidebar.expander(f"📋 {prod} 详细信息", expanded=False):
+        with st.sidebar.expander(f"📋 {prod} 详细信息", expanded=True):   # 默认展开
             st.write(f"**负责人**：{detail.get('负责人', '未填写')}")
             st.write(f"**当前状态**：{detail.get('当前状态', '未填写')}")
-            st.write(f"**🔵 起始**：{detail.get('起始日期', '')} | {detail.get('M1描述', '')}")
-            st.write(f"**🟣 中程**：{detail.get('中程日期', '')} | {detail.get('M2描述', '')}")
-            st.write(f"**🟢 结束**：{detail.get('结束日期', '')} | {detail.get('M3描述', '')}")
+            
+            st.markdown("**🔵 起始节点**")
+            st.write(f"日期：{detail.get('起始日期', '未填写')}")
+            st.write(f"描述：{detail.get('M1描述', '未填写')}")
+            
+            st.markdown("**🟣 中程节点**")
+            st.write(f"日期：{detail.get('中程日期', '未填写')}")
+            st.write(f"描述：{detail.get('M2描述', '未填写')}")
+            
+            st.markdown("**🟢 结束节点**")
+            st.write(f"日期：{detail.get('结束日期', '未填写')}")
+            st.write(f"描述：{detail.get('M3描述', '未填写')}")
 
 st.caption("数据来源：data.xlsx | 修改Excel后重新部署即可更新")
